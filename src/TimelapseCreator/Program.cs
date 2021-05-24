@@ -12,17 +12,20 @@ namespace TimelapseCreator
         private static void Main(string[] _)
         {
             //These could come from arguments
-            var basePath = @"F:\DriveImages";
-            var rawImageFolder = "Raw";
-            var datedImageFolder = "Dated";
-            var videoFolder = "Video";
-            var date = "2021-05-17";
-            var timezone = "BST";
+            const string basePath = @"F:\DriveImages";
+            const string rawImageFolder = "Raw";
+            const string datedImageFolder = "Dated";
+            const string videoFolder = "Video";
+            const string date = "2021-05-23";
+            const string timezone = "BST";
+            const bool rawOutput = false;
+            const int bitRate = 30000;
+            const bool removeRawImagesAfterProcessing = true;
 
             try
             {
-                TimestampImages(basePath, rawImageFolder, datedImageFolder, date, timezone);
-                CreateVideo(basePath, datedImageFolder, videoFolder, date);
+                TimestampImages(basePath, rawImageFolder, datedImageFolder, date, timezone, removeRawImagesAfterProcessing);
+                CreateVideo(basePath, datedImageFolder, videoFolder, date, rawOutput, bitRate);
                 Console.WriteLine("Video Created");
             }
             catch (Exception e)
@@ -36,10 +39,16 @@ namespace TimelapseCreator
             }
         }
 
-        private static void TimestampImages(string basePath, string rawImageFolder, string datedImageFolder, string date, string timezone)
+        private static void TimestampImages(string basePath, string rawImageFolder, string datedImageFolder, string date, string timezone, bool removeRawImagesAfterProcessing)
         {
             var rawPath = Path.Combine(basePath, rawImageFolder, date);
             var datedPath = Path.Combine(basePath, datedImageFolder, date);
+
+            if (!Directory.Exists(rawPath))
+            {
+                Console.WriteLine($"Skipping timestamps as {rawPath} doesn't exist");
+                return;
+            }
 
             //Clean output directory
             if (Directory.Exists(datedPath))
@@ -70,13 +79,25 @@ namespace TimelapseCreator
                     bitMapImage.Save(newPath, ImageFormat.Jpeg);
                 }
             }
+
+            if (removeRawImagesAfterProcessing)
+            {
+                Console.WriteLine($"Removing {rawPath}");
+                Directory.Delete(rawPath, true);
+            }
         }
 
-        private static void CreateVideo(string basePath, string datedImageFolder, string videoFolder, string date)
+        private static void CreateVideo(string basePath, string datedImageFolder, string videoFolder, string date, bool rawOutput, int bitRate)
         {
             var datedPath = Path.Combine(basePath, datedImageFolder, date);
             var videoFolderPath = Path.Combine(basePath, videoFolder);
-            var videoPath = Path.Combine(videoFolderPath, $"{date}.avi");
+            var videoPath = rawOutput ? Path.Combine(videoFolderPath, $"{date}.avi") : Path.Combine(videoFolderPath, $"{date}.mp4");
+
+            if (!Directory.Exists(datedPath))
+            {
+                Console.WriteLine($"Skipping timestamps as {datedPath} doesn't exist");
+                return;
+            }
 
             Directory.CreateDirectory(videoFolderPath);
 
@@ -88,8 +109,16 @@ namespace TimelapseCreator
 
             using (var writer = new VideoFileWriter())
             {
-                //Hardcoded size and framerate assuming input images came from bash script
-                writer.Open(videoPath, 1280, 720, 30, VideoCodec.Raw);
+                //Hardcoded size and frame rate assuming input images came from bash script
+                VideoCodec codec = rawOutput ? VideoCodec.Raw : VideoCodec.Default;
+                if (bitRate > 0)
+                {
+                    writer.Open(videoPath, 1280, 720, 30, codec, bitRate * 1000);
+                }
+                else
+                {
+                    writer.Open(videoPath, 1280, 720, 30, codec);
+                }
 
                 var files = Directory.GetFiles(datedPath);
 
