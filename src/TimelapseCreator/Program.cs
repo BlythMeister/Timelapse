@@ -4,6 +4,7 @@ using System.Drawing;
 using System.Drawing.Imaging;
 using System.Globalization;
 using System.IO;
+using System.Linq;
 
 namespace TimelapseCreator
 {
@@ -16,16 +17,18 @@ namespace TimelapseCreator
             const string rawImageFolder = "Raw";
             const string datedImageFolder = "Dated";
             const string videoFolder = "Video";
-            const string date = "2021-05-23";
+            const string date = "2021-05-25";
             const string timezone = "BST";
             const bool rawOutput = false;
-            const int bitRate = 30000;
+            const int bitRate = 20000;
+            const int frameRate = 15;
             const bool removeRawImagesAfterProcessing = true;
+            const bool includeAllImagesInVideo = false;
 
             try
             {
                 TimestampImages(basePath, rawImageFolder, datedImageFolder, date, timezone, removeRawImagesAfterProcessing);
-                CreateVideo(basePath, datedImageFolder, videoFolder, date, rawOutput, bitRate);
+                CreateVideo(basePath, datedImageFolder, videoFolder, date, rawOutput, bitRate, frameRate, includeAllImagesInVideo);
                 Console.WriteLine("Video Created");
             }
             catch (Exception e)
@@ -87,15 +90,26 @@ namespace TimelapseCreator
             }
         }
 
-        private static void CreateVideo(string basePath, string datedImageFolder, string videoFolder, string date, bool rawOutput, int bitRate)
+        private static void CreateVideo(string basePath, string datedImageFolder, string videoFolder, string date, bool rawOutput, int bitRate, int frameRate, bool includeAllImagesInVideo)
         {
-            var datedPath = Path.Combine(basePath, datedImageFolder, date);
             var videoFolderPath = Path.Combine(basePath, videoFolder);
-            var videoPath = rawOutput ? Path.Combine(videoFolderPath, $"{date}.avi") : Path.Combine(videoFolderPath, $"{date}.mp4");
+            string imagePath;
+            string videoPath;
 
-            if (!Directory.Exists(datedPath))
+            if (includeAllImagesInVideo)
             {
-                Console.WriteLine($"Skipping timestamps as {datedPath} doesn't exist");
+                imagePath = Path.Combine(basePath, datedImageFolder);
+                videoPath = rawOutput ? Path.Combine(videoFolderPath, "Complete.avi") : Path.Combine(videoFolderPath, "Complete.mp4");
+            }
+            else
+            {
+                imagePath = Path.Combine(basePath, datedImageFolder, date);
+                videoPath = rawOutput ? Path.Combine(videoFolderPath, $"{date}.avi") : Path.Combine(videoFolderPath, $"{date}.mp4");
+            }
+
+            if (!Directory.Exists(imagePath))
+            {
+                Console.WriteLine($"Skipping timestamps as {imagePath} doesn't exist");
                 return;
             }
 
@@ -107,36 +121,49 @@ namespace TimelapseCreator
                 File.Delete(videoPath);
             }
 
-            using (var writer = new VideoFileWriter())
+            var files = Directory.GetFiles(imagePath, "*.jpg", SearchOption.AllDirectories).OrderBy(x => x).ToList();
+
+            if (files.Any())
             {
-                //Hardcoded size and frame rate assuming input images came from bash script
-                VideoCodec codec = rawOutput ? VideoCodec.Raw : VideoCodec.Default;
-                if (bitRate > 0)
+                var codec = rawOutput ? VideoCodec.Raw : VideoCodec.Default;
+                int height, width;
+                using (var firstImage = Image.FromFile(files.First()))
                 {
-                    writer.Open(videoPath, 1280, 720, 30, codec, bitRate * 1000);
-                }
-                else
-                {
-                    writer.Open(videoPath, 1280, 720, 30, codec);
+                    height = firstImage.Height;
+                    width = firstImage.Width;
                 }
 
-                var files = Directory.GetFiles(datedPath);
-
-                Console.WriteLine($"Creating video from {files.Length} images in {datedPath}.");
-
-                //Add all images as a frame in the video
-                foreach (var file in files)
+                using (var writer = new VideoFileWriter())
                 {
-                    using (var bitmap = (Bitmap)Image.FromFile(file))
+                    if (bitRate > 0)
                     {
-                        writer.WriteVideoFrame(bitmap);
+                        writer.Open(videoPath, width, height, frameRate, codec, bitRate * 1000);
                     }
+                    else
+                    {
+                        writer.Open(videoPath, width, height, frameRate, codec);
+                    }
+
+                    Console.WriteLine($"Creating video from {files.Count} images in {imagePath}.");
+
+                    //Add all images as a frame in the video
+                    foreach (var file in files)
+                    {
+                        using (var bitmap = (Bitmap)Image.FromFile(file))
+                        {
+                            writer.WriteVideoFrame(bitmap);
+                        }
+                    }
+
+                    writer.Close();
                 }
 
-                writer.Close();
+                Console.WriteLine($"Video saved to {videoPath}");
             }
-
-            Console.WriteLine($"Video saved to {videoPath}");
+            else
+            {
+                Console.WriteLine($"No images in {imagePath}");
+            }
         }
     }
 }
