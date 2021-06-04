@@ -17,19 +17,26 @@ namespace TimelapseCreator
             const string rawImageFolder = "Raw";
             const string datedImageFolder = "Dated";
             const string videoFolder = "Video";
-            const string date = "2021-05-25";
+            const string date = "2021-06-03";
             const string timezone = "BST";
             const bool rawOutput = false;
             const int bitRate = 20000;
             const int frameRate = 15;
             const bool removeRawImagesAfterProcessing = true;
             const bool includeAllImagesInVideo = false;
+            const bool createVideo = true;
+            TimeSpan? videoStartAt = new TimeSpan(7, 0, 0);
+            TimeSpan? videoEndAt = new TimeSpan(19, 0, 0);
 
             try
             {
                 TimestampImages(basePath, rawImageFolder, datedImageFolder, date, timezone, removeRawImagesAfterProcessing);
-                CreateVideo(basePath, datedImageFolder, videoFolder, date, rawOutput, bitRate, frameRate, includeAllImagesInVideo);
-                Console.WriteLine("Video Created");
+                Console.WriteLine("Images Dated");
+                if (createVideo)
+                {
+                    CreateVideo(basePath, datedImageFolder, videoFolder, date, rawOutput, bitRate, frameRate, includeAllImagesInVideo, videoStartAt, videoEndAt);
+                    Console.WriteLine("Video Created");
+                }
             }
             catch (Exception e)
             {
@@ -90,7 +97,7 @@ namespace TimelapseCreator
             }
         }
 
-        private static void CreateVideo(string basePath, string datedImageFolder, string videoFolder, string date, bool rawOutput, int bitRate, int frameRate, bool includeAllImagesInVideo)
+        private static void CreateVideo(string basePath, string datedImageFolder, string videoFolder, string date, bool rawOutput, int bitRate, int frameRate, bool includeAllImagesInVideo, TimeSpan? startAt, TimeSpan? endAt)
         {
             var videoFolderPath = Path.Combine(basePath, videoFolder);
             string imagePath;
@@ -103,8 +110,31 @@ namespace TimelapseCreator
             }
             else
             {
+                var videoDate = date;
+
+                if (startAt.HasValue || endAt.HasValue)
+                {
+                    if (startAt.HasValue)
+                    {
+                        videoDate += $"_{startAt.Value.Hours.ToString().PadLeft(2, '0')}{startAt.Value.Minutes.ToString().PadLeft(2, '0')}";
+                    }
+                    else
+                    {
+                        videoDate += "_0000";
+                    }
+
+                    if (endAt.HasValue)
+                    {
+                        videoDate += $"-{endAt.Value.Hours.ToString().PadLeft(2, '0')}{endAt.Value.Minutes.ToString().PadLeft(2, '0')}";
+                    }
+                    else
+                    {
+                        videoDate += "-2359";
+                    }
+                }
+
                 imagePath = Path.Combine(basePath, datedImageFolder, date);
-                videoPath = rawOutput ? Path.Combine(videoFolderPath, $"{date}.avi") : Path.Combine(videoFolderPath, $"{date}.mp4");
+                videoPath = rawOutput ? Path.Combine(videoFolderPath, $"{videoDate}.avi") : Path.Combine(videoFolderPath, $"{videoDate}.mp4");
             }
 
             if (!Directory.Exists(imagePath))
@@ -149,6 +179,22 @@ namespace TimelapseCreator
                     //Add all images as a frame in the video
                     foreach (var file in files)
                     {
+                        if (!includeAllImagesInVideo)
+                        {
+                            var timestampText = file.Replace(imagePath, "").Substring(1).Replace(".jpg", "");
+                            var photoTimeOfDay = DateTime.ParseExact(timestampText, "yyMMdd_HHmm", CultureInfo.InvariantCulture, DateTimeStyles.AssumeLocal).TimeOfDay;
+
+                            if (startAt.HasValue && photoTimeOfDay < startAt.Value)
+                            {
+                                continue;
+                            }
+
+                            if (endAt.HasValue && photoTimeOfDay > endAt.Value)
+                            {
+                                continue;
+                            }
+                        }
+
                         using (var bitmap = (Bitmap)Image.FromFile(file))
                         {
                             writer.WriteVideoFrame(bitmap);
