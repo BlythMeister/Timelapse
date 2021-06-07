@@ -13,25 +13,48 @@ namespace TimelapseCreator
         private static void Main(string[] _)
         {
             //These could come from arguments
+
+            //Folder Paths
             const string basePath = @"F:\DriveImages";
             const string rawImageFolder = "Raw";
             const string datedImageFolder = "Dated";
             const string videoFolder = "Video";
-            const string date = "2021-06-03";
-            const string timezone = "BST";
-            const bool rawOutput = false;
-            const int bitRate = 20000;
-            const int frameRate = 15;
-            const bool removeRawImagesAfterProcessing = true;
-            const bool includeAllImagesInVideo = false;
+
+            //Run Part Options
+            const bool stampImages = true;
             const bool createVideo = true;
+
+            //Video & Image Stamp Shared Config
+            const string date = "2021-06-06";
+
+            //Image Stamp Config
+            const string timezone = "BST";
+            const bool removeRawImagesAfterProcessing = true;
+
+            //Video Config 1 day
+            const bool rawOutput = false;
             TimeSpan? videoStartAt = new TimeSpan(7, 0, 0);
             TimeSpan? videoEndAt = new TimeSpan(19, 0, 0);
+            const int bitRate = 20000;
+            const int frameRate = 15;
+            const bool includeAllImagesInVideo = false;
+
+            //Video config all days (fast)
+            //const bool rawOutput = false;
+            //TimeSpan? videoStartAt = null;
+            //TimeSpan? videoEndAt = null;
+            //const int bitRate = 10000;
+            //const int frameRate = 60;
+            //const bool includeAllImagesInVideo = true;
 
             try
             {
-                TimestampImages(basePath, rawImageFolder, datedImageFolder, date, timezone, removeRawImagesAfterProcessing);
-                Console.WriteLine("Images Dated");
+                if (stampImages)
+                {
+                    TimestampImages(basePath, rawImageFolder, datedImageFolder, date, timezone, removeRawImagesAfterProcessing);
+                    Console.WriteLine("Images Dated");
+                }
+
                 if (createVideo)
                 {
                     CreateVideo(basePath, datedImageFolder, videoFolder, date, rawOutput, bitRate, frameRate, includeAllImagesInVideo, videoStartAt, videoEndAt);
